@@ -36,6 +36,11 @@ const userSchema = joi.object({
     password: joi.string().min(3).required()
 })
 
+const transactionSchema = joi.object({
+    value: joi.number().required(),
+    description: joi.string().required()
+})
+
 // endpoints
 
 // cadastro
@@ -97,6 +102,31 @@ app.get("/logged-user", async (req, res) => {
 
         delete user.password
         res.send(user)
+    } catch (err) {
+        res.status(500).send(err.message)
+    }
+})
+
+// rota para transação do tipo entrada ou saída
+app.post("/transaction", async (req, res) => {
+    const { authorization } = req.headers
+    const token = authorization?.replace("Bearer ", "")
+    const { value, description } = req.body
+
+    // validação do token
+    if(!token) return res.sendStatus(401)
+
+    // validação do body
+    const validation = transactionSchema.validate(req.body, { abortEarly: false })
+    if(validation.error) return res.status(422).send(validation.error.details.map((d) => d.message))
+
+    try {
+        const session = await db.collection("session").findOne({ token })
+        if(!session) return res.sendStatus(401)
+
+        const transaction = await db.collection("transaction").insertOne({ value, description })
+        
+        res.send(transaction)
     } catch (err) {
         res.status(500).send(err.message)
     }
