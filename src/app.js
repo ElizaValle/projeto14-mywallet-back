@@ -36,7 +36,7 @@ const userSchema = joi.object({
     password: joi.string().min(3).required()
 })
 
-const transactionSchema = joi.object({
+const operationSchema = joi.object({
     value: joi.number().required(),
     description: joi.string().required()
 })
@@ -107,8 +107,8 @@ app.get("/logged-user", async (req, res) => {
     }
 })
 
-// rota para transação do tipo entrada ou saída
-app.post("/transaction", async (req, res) => {
+// rota para operações do tipo entrada ou saída
+app.post("/operation", async (req, res) => {
     const { authorization } = req.headers
     const token = authorization?.replace("Bearer ", "")
     const { value, description } = req.body
@@ -117,20 +117,63 @@ app.post("/transaction", async (req, res) => {
     if(!token) return res.sendStatus(401)
 
     // validação do body
-    const validation = transactionSchema.validate(req.body, { abortEarly: false })
+    const validation = operationSchema.validate(req.body, { abortEarly: false })
     if(validation.error) return res.status(422).send(validation.error.details.map((d) => d.message))
 
     try {
         const session = await db.collection("session").findOne({ token })
         if(!session) return res.sendStatus(401)
 
-        const transaction = await db.collection("transaction").insertOne({ value, description })
+        const user = await db.collection("users").findOne({ _id: session.userId })
+
+        delete user.password
+
+        const operation = await db.collection("operation").insertOne({ value, description })
         
-        res.send(transaction)
+        res.send({ user, operation })
     } catch (err) {
         res.status(500).send(err.message)
     }
 })
+
+// lista todas as operações 
+app.get("/operation", async (req, res) => {
+    const { authorization } = req.headers
+    const token = authorization?.replace("Bearer ", "")
+
+    if(!token) return res.sendStatus(401)
+
+    try {
+        const session = await db.collection("session").findOne({ token })
+        if(!session) return res.sendStatus(401)
+
+        const user = await db.collection("users").findOne({ _id: session.userId })
+
+        delete user.password
+
+        // obtem todas as operações do usuário
+        const operations = await db.collection("operation")
+            .find({ _id: session.userId })
+            .sort({ date: -1 })  // ordena por data decrescente
+            .toArray()
+        
+        // calcula saldo final
+        const totalEntry = operations.reduce((accumulatedValue, operation) => {
+            return operation.value > 0 ? accumulatedValue + operation.value : accumulatedValue
+        }, 0)
+
+        const totalOutput = operations.reduce((accumulatedValue, operation) => {
+            return operation.value < 0 ? accumulatedValue + operation.value : accumulatedValue
+        }, 0)
+
+        const totalBalance = totalEntry + totalOutput
+        
+        res.send({ user, operations, totalEntry, totalOutput, totalBalance })
+
+    } catch (err) {
+        res.status(500).send(err.message)
+    }
+ })
 
 const PORT = 5000
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`))
