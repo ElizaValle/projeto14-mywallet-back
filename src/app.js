@@ -128,7 +128,7 @@ app.post("/operation", async (req, res) => {
 
         delete user.password
 
-        const operation = await db.collection("operation").insertOne({ value, description })
+        const operation = await db.collection("operation").insertOne({ userId: user._id, value, description })
         
         res.send({ user, operation })
     } catch (err) {
@@ -153,7 +153,7 @@ app.get("/operation", async (req, res) => {
 
         // obtem todas as operações do usuário
         const operations = await db.collection("operation")
-            .find({ _id: session.userId })
+            .find({ userId: session.userId })
             .sort({ date: -1 })  // ordena por data decrescente
             .toArray()
         
@@ -177,3 +177,9 @@ app.get("/operation", async (req, res) => {
 
 const port = process.env.PORT || 5000
 app.listen(port, () => console.log(`Servidor rodando na porta ${port}`))
+
+
+
+
+
+// https://my-wallet-38et.onrender.com    - api online, colocar link no ThunderCLient
