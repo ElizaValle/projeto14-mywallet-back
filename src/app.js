@@ -3,6 +3,7 @@ import cors from "cors"
 import { MongoClient } from "mongodb"
 import dotenv from "dotenv"
 import joi from "joi"
+import bcrypt from "bcrypt"
 
 const app = express()
 app.use(express.json())
@@ -27,20 +28,46 @@ const schemaCadastro = joi.object({
     confirmeSenha: joi.string().min(3).required()
 })
 
+const schemaLogin = joi.object({
+    email: joi.string().email().required(),
+    senha: joi.string().min(3).required()
+})
+
 // endpoints
 app.post("/sign-up", async (req, res) => {
     const { nome, email, senha, confirmeSenha } = req.body
+
+    const senhaHash = bcrypt.hashSync(senha, 10)
 
     const validacao = schemaCadastro.validate(req.body, { abortEarly: false })
     if (validacao.error) return res.sendStatus(422)
 
     try {
-        const emailUsuario = await db.collection("usuarios").findOne({ email })
-        if (emailUsuario) return res.sendStatus(409)
+        const usuario = await db.collection("usuarios").findOne({ email })
+        if (usuario) return res.status(409).send("E-mail já cadastrado!")
 
-        await db.collection("usuarios").insertOne({ nome, email, senha })
+        await db.collection("usuarios").insertOne({ nome, email, senha: senhaHash })
 
         res.sendStatus(201)
+
+    } catch (err) {
+        return res.status(500).send(err.message)
+    }
+})
+
+app.post("/sign-in", async (req, res) => {
+    const { email, senha } = req.body
+
+    const validacao = schemaLogin.validate(req.body, { abortEarly: false })
+    if (validacao.error) return res.sendStatus(422)
+
+    try {
+        const usuario = await db.collection("usuarios").findOne({ email })
+        if (!usuario) return res.sendStatus(404)
+
+        if (!bcrypt.compareSync(senha, usuario.senha)) return res.sendStatus(401) 
+
+        res.sendStatus(200)
 
     } catch (err) {
         return res.status(500).send(err.message)
