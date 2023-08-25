@@ -4,6 +4,7 @@ import { MongoClient } from "mongodb"
 import dotenv from "dotenv"
 import joi from "joi"
 import bcrypt from "bcrypt"
+import { v4 as uuid } from "uuid"
 
 const app = express()
 app.use(express.json())
@@ -67,6 +68,10 @@ app.post("/sign-in", async (req, res) => {
 
         if (!bcrypt.compareSync(senha, usuario.senha)) return res.sendStatus(401) 
 
+        const token = uuid()
+
+        await db.collection("sessoes").insertOne({ usuarioId: usuario._id, token })
+        
         res.sendStatus(200)
 
     } catch (err) {
