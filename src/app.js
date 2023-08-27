@@ -5,6 +5,7 @@ import dotenv from "dotenv"
 import joi from "joi"
 import bcrypt from "bcrypt"
 import { v4 as uuid } from "uuid"
+import dayjs from "dayjs"
 
 const app = express()
 app.use(express.json())
@@ -32,6 +33,12 @@ const schemaCadastro = joi.object({
 const schemaLogin = joi.object({
     email: joi.string().email().required(),
     senha: joi.string().min(3).required()
+})
+
+const schemaTransacao = joi.object({
+    valor: joi.number().positive().precision(2).required(),
+    descricao: joi.string().required(),
+    tipo: joi.string().valid("proventos", "despesas").required()
 })
 
 // endpoints
@@ -71,8 +78,65 @@ app.post("/sign-in", async (req, res) => {
         const token = uuid()
 
         await db.collection("sessoes").insertOne({ usuarioId: usuario._id, token })
-        
-        res.sendStatus(200)
+
+        res.status(200).send({ token, nomeUsuario: usuario.nome })
+
+    } catch (err) {
+        return res.status(500).send(err.message)
+    }
+})
+
+app.post("/nova-transacao", async (req, res) => {
+    const { authorization } = req.headers
+    const token = authorization?.replace("Bearer ", "")
+    const { valor, descricao, tipo } = req.body
+
+    //if (!token) return res.sendStatus(401)
+
+    const validacao = schemaTransacao.validate(req.body, { abortEarly: false })
+    if (!validacao) return res.sendStatus(422)
+
+    try {
+        const sessao = await db.collection("sessoes").findOne({ token })
+        //if (!sessao) return res.sendStatus(401)
+
+        const usuarioId = sessao.usuarioId
+
+        const usuario = await db.collection("usuarios").findOne({ _id: sessao.usuarioId })
+        // if (!usuario) return res.sendStatus(401)
+
+        // delete usuario.senha
+
+        await db.collection("transacoes").insertOne({ valor: Number(valor), descricao, tipo, usuarioId, date: dayjs().valueOf() })
+
+        res.sendStatus(201)
+
+    } catch (err) {
+        return res.status(500).send(err.message)
+    }
+})
+
+app.get("/transacao", async (req, res) => {
+    const { authorization } = req.headers
+    const token = authorization?.replace("Bearer ", "")
+
+    if (!token) return res.sendStatus(401)
+
+    try {
+        const sessao = await db.collection("sessoes").findOne({ token })
+        if (!sessao) return res.sendStatus(401)
+
+        const usuario = await db.collection("usuarios").findOne({ _id: sessao.usuarioId })
+        if (!usuario) return res.sendStatus(401)
+
+        // delete usuario.senha
+
+        const transacoes = await db.collection("transacoes")
+            .findOne({ usuarioId: sessao.usuarioId })
+            .sort({ date: -1 })
+            .toArray()
+
+        res.send(transacoes)
 
     } catch (err) {
         return res.status(500).send(err.message)
