@@ -143,6 +143,22 @@ app.get("/transacao", async (req, res) => {
     }
 })
 
+app.post("/logout", async (req, res) => {
+    const { authorization } = req.headers
+    const token = authorization?.replace("Bearer ", "")
+
+    if (!token) res.sendStatus(401)
+
+    try {
+        await db.collection("sessoes").deleteOne({ token })
+
+        res.sendStatus(200)
+
+    } catch (err) {
+        return res.status(500).send(err.message)
+    }
+})
+
 // escuta da porta
 const PORT = 5000
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`))
