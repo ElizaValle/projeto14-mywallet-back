@@ -91,19 +91,19 @@ app.post("/nova-transacao", async (req, res) => {
     const token = authorization?.replace("Bearer ", "")
     const { valor, descricao, tipo } = req.body
 
-    //if (!token) return res.sendStatus(401)
+    if (!token) return res.sendStatus(401)
 
     const validacao = schemaTransacao.validate(req.body, { abortEarly: false })
     if (!validacao) return res.sendStatus(422)
 
     try {
         const sessao = await db.collection("sessoes").findOne({ token })
-        //if (!sessao) return res.sendStatus(401)
+        if (!sessao) return res.sendStatus(401)
 
         const usuarioId = sessao.usuarioId
 
         const usuario = await db.collection("usuarios").findOne({ _id: sessao.usuarioId })
-        // if (!usuario) return res.sendStatus(401)
+        if (!usuario) return res.sendStatus(401)
 
         // delete usuario.senha
 
@@ -132,7 +132,7 @@ app.get("/transacao", async (req, res) => {
         // delete usuario.senha
 
         const transacoes = await db.collection("transacoes")
-            .findOne({ usuarioId: sessao.usuarioId })
+            .find({ usuarioId: sessao.usuarioId })
             .sort({ date: -1 })
             .toArray()
 
